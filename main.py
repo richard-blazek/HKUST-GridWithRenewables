@@ -34,13 +34,6 @@ def train_mlp_regressor(X_train, y_train):
     model.fit(X_train, y_train)
     return model
 
-def estimate_model_statistics(regressor: MLPRegressor, X_estim, y_estim):
-    y_hat = regressor.predict(X_estim)
-    r2 = r2_score(y_estim, y_hat)
-    mse = mean_squared_error(y_estim, y_hat)
-    sigma = np.std(y_estim - y_hat, ddof=(regressor.n_features_in_ + 1) * 64 + 65 * 32 + 33 * 16 + 17)
-    return r2, mse, sigma
-
 df = load_setup()
 df_train, df_estim, df_sim = split_data(df, 0.6, 0.3)
 
@@ -52,16 +45,19 @@ y_train, y_estim, y_sim = y_train.to_numpy(), y_estim.to_numpy(), y_sim.to_numpy
 
 regressor = train_mlp_regressor(X_train, y_train)
 
-r2, mse, sigma = estimate_model_statistics(regressor, X_estim, y_estim)
+y_hat = regressor.predict(X_estim)
+r2 = r2_score(y_estim, y_hat)
+mse = mean_squared_error(y_estim, y_hat)
+sigma = np.std(y_estim - y_hat, ddof=(regressor.n_features_in_ + 1) * 64 + 65 * 32 + 33 * 16 + 17)
+
 print('R-squared:', r2)
 print('Mean squared error:', mse)
 print('Sigma:', sigma)
 
-# Battery capacity is twelve times the standard deviation of the prediction error
-# Because we want to have six sigma on both sides from the middle so that there
-# is only very low chance that we exceed the capacity
-DEMAND = 1.0
-CAPACITY = 12 * sigma
+# Battery capacity is six times the standard deviation of the prediction error
+# so that there is only very low chance that we exceed the capacity
+DEMAND = 0.3
+CAPACITY = 6 * sigma
 T = len(y_sim)
 
 turbine_pred = np.zeros(T)
@@ -69,16 +65,42 @@ turbine_true = np.zeros(T)
 gas_power = np.zeros(T)
 target = np.zeros(T)
 energy = np.zeros(T + 1)
-energy[0] = CAPACITY / 2
+energy[0] = CAPACITY
 
 for t in range(T):
     turbine_pred[t] = regressor.predict(X_sim[t:t+1])[0]
-    target[t] = DEMAND + (CAPACITY / 2 - energy[t])
+    target[t] = DEMAND + (CAPACITY - energy[t])
     gas_power[t] = max(target[t] - turbine_pred[t], 0)
     turbine_true[t] = y_sim[t]
-    energy[t + 1] = energy[t] + gas_power[t] + turbine_true[t] - DEMAND
+    energy[t + 1] = min(energy[t] + gas_power[t] + turbine_true[t] - DEMAND, CAPACITY)
 
-plt.plot(energy, 'k')
-plt.plot(np.zeros(T + 1), 'r')
-plt.plot(np.ones(T + 1) * CAPACITY, 'r')
-plt.show()
+plt.plot(y_estim, y_hat, 'o', markersize=0.5)
+plt.xlabel('Power generated')
+plt.ylabel('Prediction')
+plt.savefig('Power-generated-vs-Prediction.png')
+plt.close()
+
+plt.plot(y_estim - y_hat)
+plt.title('Prediction error')
+plt.savefig('Prediction-error.png')
+plt.close()
+
+plt.plot(energy, 'r')
+plt.plot(np.zeros(T + 1), 'b')
+plt.plot(np.ones(T + 1) * CAPACITY, 'b')
+plt.title('Battery state')
+plt.savefig('Battery-state.png')
+plt.close()
+
+plt.plot(gas_power.cumsum(), 'r', label='gas power plant', linewidth=0.7)
+plt.plot(turbine_true.cumsum(), 'g', label='wind turbine', linewidth=0.7)
+plt.plot((gas_power + turbine_true).cumsum(), 'b', label='total electricity', linewidth=0.5)
+plt.title('Energy production (cummulative)')
+plt.legend()
+plt.savefig('Energy-production.png')
+plt.close()
+
+plt.plot(turbine_true.cumsum() / (gas_power + turbine_true).cumsum(), 'g')
+plt.title('Clean energy share (cumulative)')
+plt.savefig('Clean-energy-share.png')
+plt.close()

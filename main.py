@@ -10,13 +10,7 @@ from sklearn.metrics import r2_score
 def load_setup():
     df = pd.read_csv('Power.csv')
     df['hour'] = df['Time'].apply(lambda t: int(t[-8:-6]))
-    demand = np.array([
-        0.211, 0.201, 0.195, 0.190, 0.185, 0.195,
-        0.238, 0.264, 0.275, 0.270, 0.264, 0.280,
-        0.275, 0.270, 0.254, 0.264, 0.291, 0.317,
-        0.301, 0.286, 0.270, 0.254, 0.238, 0.222,
-    ])
-    return df, demand
+    return df
 
 def split_data(df: pd.DataFrame, pred_len: int):
     return df[:-pred_len], df[-pred_len:]
@@ -37,7 +31,7 @@ def train_mlp_regressor(X_train, y_train):
     model.fit(X_train, y_train)
     return model
 
-df, demand = load_setup()
+df = load_setup()
 df_train, df_pred = split_data(df, 720)
 
 X_train, y_train = extract_xy(df_train)

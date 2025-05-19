@@ -1,1 +1,1 @@
-# ieda-project
+# Grid management with renewables
